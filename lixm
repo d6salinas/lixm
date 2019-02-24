@@ -1,0 +1,312 @@
+#!/bin/bash
+# 
+# lixm
+#	Corta y/o une el contenido de archivos planos.
+# 
+# Autor:
+#	Diego Salinas <dsalinas.fsd6@gmail.com>
+# 
+# Fecha:
+#	2016-07-27
+# 
+# Componentes:
+#	* Archivo lixm_ini.lim
+#	* Archivo lixm_fin.lim
+# 
+# Uso:
+#	Copiar el folder lixm/ a /opt/, crear un alias 
+#	en ~/.bashrc: alias lix='sh /opt/lixm/lixm' 
+#	actualizar: source ~/.bashrc
+#
+
+ASG=$@
+VER="0.7.0"
+
+msgayuda() {
+	clear
+	echo ""
+	echo "================================================================================="
+	echo "|| $tp00 Opciones"
+	echo "||"
+	echo "||    $tp00 -sf"
+	echo "||        Separa el contenido de un archivo en el número parametrizado de lineas."
+	echo "||        $ $tp00 -sf numLines filename"
+	echo "||    $tp00 -jf"
+	echo "||        Une el contenido de dos archivos en el órden parametrizado."
+	echo "||        $ $tp00 -jf filename1 filename2"
+	echo "||    $tp00 -cl"
+	echo "||        Cuenta el número de lineas de un archivo."
+	echo "||        $ $tp00 -cl filename"
+	echo "||    $tp00 -el"
+	echo "||        Informa el tipo de terminación de línea del archivo."
+	echo "||        [ UNIX | Windows/DOS | Macintosh ]"
+	echo "||        $ $tp00 -el filename"
+	echo "||    $tp00 --h"
+	echo "||        Ayuda."
+	echo "||        $ $tp00 --h"
+	echo "||    $tp00 --v"
+	echo "||        Versión."
+	echo "||        $ $tp00 --v"
+	echo "||"
+	echo "|| `version`"
+	echo "================================================================================="
+	echo ""
+}
+
+version() {
+	echo "$tp00 version $VER"
+	echo ""
+	exit 1
+}
+
+# ==================================================
+# ==================================================
+# mensajes lixm
+tp00="lix"
+tp01="lix:"
+tp02="Ver '$tp00 --h'."
+
+# mensajes de detalle
+#msgdet01=""
+#msgdet02=""
+
+# mensajes de error
+msgerr00="$tp01 No fué ingresado una opción/parámetro de $tp00. $tp02"
+msgerr01="$tp01 Hacen falta parámetros para completar la operación. $tp02"
+
+msgact() {
+	msgerr02="$tp01 '$parnum01' no es un valor numérico. $tp02"
+	msgerr03="$tp01 '$parfil01' no fué encontrado. $tp02"
+}
+
+msgerrclr() {
+	unset parnum01
+	unset parfil01
+}
+
+# ==================================================
+
+msgdet() {
+	echo "$@"
+	echo ""
+}
+
+msgerr() {
+	echo "$@"
+	echo ""
+	msgerrclr
+	exit 1
+}
+# ==================================================
+# ==================================================
+
+# valida la existencia de un archivo
+validaexistarch(){
+	if [[ -e $1 ]]; then
+		filename="$1"
+	else
+		parfil01=$1
+		msgact
+		msgerr $msgerr03
+	fi
+}
+
+# valida parámetros: 1 numérico, 2 archivo
+validaParLIS(){
+	if [[ $2 != "" && $3 != ""  ]]; then
+		if [[ $2 =~ ^-?[0-9]+$ ]]; then
+			tplines="$2"
+		else
+			parnum01=$2
+			msgact
+			msgerr $msgerr02
+		fi
+		validaexistarch $3
+	else
+		msgerr $msgerr01
+	fi
+}
+
+# valida parámetros: 1 archivo, 2 archivo
+validaParLIJ(){
+	if [[ $2 != "" && $3 != "" ]]; then
+		# se crea el arreglo de nombres de archivo
+		PROARRYAJ1=([0]=$2 [1]=$3)
+		
+		for filn in ${PROARRYAJ1[@]}
+		do
+			if ! [[ -e $filn ]]; then
+				parfil01=$filn
+				msgact
+				msgerr $msgerr03
+			fi
+		done
+	else
+		msgerr $msgerr01
+	fi
+}
+
+# valida parámetros: 1 archivo
+validaParLCF(){
+	if [[ $2 != ""  ]]; then
+		validaexistarch $2
+	else
+		msgerr $msgerr01
+	fi
+}
+
+cortaArchivo() {
+	contli=0 # contador del total de lineas recorridas del archivo
+	contfi=1 # contador de nuevos archivos creados al momento
+	contln=0 # contador de lineas ingresadas al nuevo archivo
+	numfli=0 # número de archivo nuevo creado en la iteración anterior
+	
+	tflines=`wc -l $filename | cut -d' ' -f1`
+	orfn=`basename $filename`
+	
+	if [[ $tplines -ge $tflines ]]; then
+		echo ""
+		echo "$tp01 El archivo '$orfn' contiene un número menor o igual de líneas al solicitado."
+		echo "$tp01 Número de líneas archivo original: $tflines"
+		echo "$tp01 Número de líneas archivo nuevo:    $tplines"
+		echo ""
+		exit 1
+	fi
+	
+	nsfn="${orfn%.*}""_$tp00_"
+	nsfd="$tp00_""`date +%Y%m%d`_`date +%H%M%S`"
+	fcontent=`cat $filename`
+	`mkdir $nsfd`
+	
+	for lns in $fcontent;
+	do
+		# nombre del nuevo archivo cortado, segun el original
+		nsfnpart="$nsfd""/""$nsfn""$contfi"
+		# incremento contador del total de lineas recorridas del archivo
+		((contli++))
+		# incremento contador de lineas ingresadas al nuevo archivo
+		((contln++))
+		# se graba el número de archivo creado en la iteración anterior
+		numfli=$contfi
+		
+		if [[ $contln -eq 1 ]]; then
+			`echo $lns > $nsfnpart`
+			
+			# esta seccion por si hubiese un requerimiento especial, al inicio de cada nuevo archivo generado
+			# trabajar aquí el contenido del archivo lixm_ini.lim
+		
+		else
+			if [[ $contln -eq $tplines || $contli -eq $tflines ]]; then
+				`echo $lns >> $nsfnpart`
+
+				# esta seccion por si hubiese un requerimiento especial, al final de cada nuevo archivo generado
+				# trabajar aquí el contenido del archivo lixm_fin.lim
+
+				# se reinicia el contador de lineas ingresadas al nuevo archivo
+				contln=0
+				# se incrementa el contador de nuevos archivos creados al momento
+				((contfi++))
+			else
+				`echo $lns >> $nsfnpart`
+			fi
+		fi
+	done
+	
+	echo ""
+	echo "$tp01 Archivo '$orfn' cortado."
+	echo "$tp01 Se crearon $numfli archivos nuevos. Validar con el siguiente comando:"
+	echo "$tp01 ]$ ls -la $nsfd"
+	echo ""
+	
+	limpiaVars
+}
+
+uneArchivos(){
+	nfname="$tp00_`date +%Y%m%d`_`date +%H%M%S`"
+	contna=0
+	
+	for filn in ${PROARRYAJ1[@]}
+	do
+		((contna++))
+		if [[ $contna -eq 1 ]]; then
+			`cat $filn > $nfname`
+		else
+			`cat $filn >> $nfname`
+		fi
+	done
+	unset contna
+	unset PROARRYAJ1
+	
+	echo ""
+	echo "$tp01 Archivos unidos."
+	echo "$tp01 El archivo final es: $nfname, validar con los siguientes comandos:"
+	echo "$tp01 ]$ ls -lt $nfname"
+	echo "$tp01 ]$ vim $nfname"
+	echo ""
+}
+
+muestraNumLineasArchivo(){
+	echo "$tp01 Número de líneas"
+	echo `wc -l $filename`
+	echo ""
+	unset filename
+}
+
+muestraTipoTermArchivo(){
+	echo "$tp01 Tipo de final de líneas"
+	echo `file $filename`
+	echo ""
+	unset filename
+}
+
+leeParametros() {	
+	case $1 in
+		"-sf")
+			validaParLIS $@
+			cortaArchivo
+			;;
+		"-jf")
+			validaParLIJ $@
+			uneArchivos
+			;;
+		"-cl")
+			validaParLCF $@
+			muestraNumLineasArchivo
+			;;
+		"-el")
+			validaParLCF $@
+			muestraTipoTermArchivo
+			;;
+		"--h")
+			msgayuda
+			;;
+		"--v")
+			version
+			;;
+		"")
+			msgayuda
+			;;
+		*)
+			msgerr $msgerr00
+			exit
+			;;
+	esac
+}
+
+limpiaVars() {
+	unset contli
+	unset contfi
+	unset contln
+	unset numfli
+	unset orfn
+	unset nsfn
+	unset nsfd
+	unset filename
+	unset fcontent
+	unset tplines
+	unset tflines
+	unset nsfnpart
+}
+
+leeParametros $ASG
+
